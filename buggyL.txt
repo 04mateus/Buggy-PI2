@@ -1,0 +1,200 @@
+#include Motores.h
+#include Ultrassom.h
+#include Encoder.h
+#include Baterias.h
+#include Linha.h
+
+ Tarefas básicas do exemplo 
+void tarefa_1();   comando bluetouth
+void tarefa_2();   seguidor de linha
+void tarefa_3();
+volatile bool exibir_estado = true;
+static unsigned char vlcdd = 140;
+volatile int seguidor = 0;
+volatile int tempo_fora = 0;
+int obstaculo = 0;
+int desvio = 0;
+volatile int atdesvio = 0;
+int p = 0, q = 0;
+
+ Instâncias das classe dos sensoresatuadores 
+Motores motores;
+Baterias baterias;
+Linha seguidor_linha;
+Ultrassom ultrassom_1(UltrassomECHO1, UltrassomTRIG1);
+Encoder encoder_0(EncoderD0);
+
+
+
+ Configuração e mensagem inicial 
+void setup() {
+
+  Serial.begin(9600);
+  while (!Serial)
+    ;
+
+  delay(5000);
+}
+
+ Loop de atualização do sensores e das tarefas 
+void loop() {
+  ultrassom_1.atualizar();
+
+  tarefa_1();
+  tarefa_2();
+  tarefa_3();
+}
+
+ Tarefa 2 comandos da serial 
+void tarefa_1() {
+
+   Caso tenha recebido algum dado do PC 
+  if (Serial.available()) {
+    char dado_recebido = Serial.read();
+
+    if (dado_recebido == 'S')
+      motores.parar();
+    else if (dado_recebido == 'F')
+      motores.frente(vlcdd);
+    else if (dado_recebido == 'B')
+      motores.tras(vlcdd);
+    else if (dado_recebido == 'R')
+      motores.esquerda(vlcdd);
+    else if (dado_recebido == 'L')
+      motores.direita(vlcdd);
+    else if (dado_recebido == 'I')
+      motores.esquerdacurva(vlcdd);
+    else if (dado_recebido == 'G')
+      motores.direitacurva(vlcdd);
+    else if (dado_recebido == 'J')
+      motores.esquerdacurvatras(vlcdd);
+    else if (dado_recebido == 'H')
+      motores.direitacurvatras(vlcdd);
+    else if (dado_recebido == '0')
+      vlcdd = 80;
+    else if (dado_recebido == '1')
+      vlcdd = 100;
+    else if (dado_recebido == '2')
+      vlcdd = 120;
+    else if (dado_recebido == '3')
+      vlcdd = 140;
+    else if (dado_recebido == '4')
+      vlcdd = 160;
+    else if (dado_recebido == '5')
+      vlcdd = 180;
+    else if (dado_recebido == '6')
+      vlcdd = 200;
+    else if (dado_recebido == '7')
+      vlcdd = 210;
+    else if (dado_recebido == '8')
+      vlcdd = 225;
+    else if (dado_recebido == '9')
+      vlcdd = 240;
+    else if (dado_recebido == 'q')
+      vlcdd = 255;
+    else if (dado_recebido == 'W') {
+      seguidor = 1;
+      tempo_fora = 0;
+    } else if (dado_recebido == 'w') {
+      seguidor = 0;
+      tempo_fora = 0;
+    } else if (dado_recebido == 'U') {
+      seguidor = 1;
+      tempo_fora = 0;
+    } else if (dado_recebido == 'u') {
+      seguidor = 0;
+      tempo_fora = 0;
+    } else if (dado_recebido == 'V') {
+      atdesvio = 1;
+      desvio = 0;
+      seguidor = 0;
+      tempo_fora = 0;
+      p = 0;
+      q = 0;
+    } else if (dado_recebido == 'v') {
+      atdesvio = 0;
+      desvio = 0;
+      seguidor = 0;
+      tempo_fora = 0;
+    }
+  }
+}
+
+
+
+
+ execução da função tarefa_2 
+
+const unsigned long periodo_tarefa_2 = 10;
+unsigned long tempo_tarefa_2 = millis();
+
+
+void tarefa_2() {
+  unsigned long tempo_atual = millis();
+
+
+  if (tempo_atual - tempo_tarefa_2  periodo_tarefa_2) {
+    tempo_tarefa_2 = tempo_atual;
+    volatile int direita = seguidor_linha.obter_direita(), esquerda = seguidor_linha.obter_esquerda();
+    if (seguidor == 1) {
+
+
+      if (esquerda == 1 && direita == 0) {
+        motores.direita(vlcdd);
+        tempo_fora = 0;
+      } else if (esquerda == 0 && direita == 1) {
+        motores.esquerda(vlcdd);
+        tempo_fora = 0;
+      } else if (esquerda == 1 && direita == 1) {
+        motores.parar();
+      } else if (esquerda == 0 && direita == 0) {
+        if (tempo_fora  150) {
+          motores.parar();
+        } else if (tempo_fora  70) {
+          motores.direitacurva(vlcdd);
+          tempo_fora++;
+        } else {
+          motores.frente(vlcdd - 70);
+          tempo_fora++;
+        }
+      }
+    } else if (seguidor == 0 && desvio == 1) {
+      direita = seguidor_linha.obter_direita();
+      esquerda = seguidor_linha.obter_esquerda();
+      atdesvio = 0;
+      if (direita == 0 && p == 0 && q==0)
+        motores.direita(145);
+      else if (esquerda == 0 && p == 0){
+      q = 1;
+        motores.direita(145);}
+      else if (direita == 1) {
+        p = 1;
+        motores.esquerda(120);
+      } else {
+        desvio = 0;
+        atdesvio = 1;
+        motores.parar();
+        seguidor = 1;
+      }
+    }
+  }
+}
+
+
+const unsigned long periodo_tarefa_3 = 100;
+unsigned long tempo_tarefa_3 = millis();
+
+
+void tarefa_3() {
+  unsigned long tempo_atual = millis();
+  if (tempo_atual - tempo_tarefa_3  periodo_tarefa_3) {
+    unsigned long dist = ultrassom_1.obter_distancia();
+    tempo_tarefa_3 = tempo_atual;
+    tempo_atual = millis();
+    if (atdesvio == 1)
+    if (dist  900) {
+      seguidor = 0;
+      desvio = 1;
+    }
+  }
+}
